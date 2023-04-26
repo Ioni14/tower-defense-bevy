@@ -1,6 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<map version="1.10" tiledversion="1.10.1" orientation="orthogonal" renderorder="right-down" width="32" height="32" tilewidth="64" tileheight="64" infinite="0" nextlayerid="2" nextobjectid="1">
- <tileset firstgid="1" source="tileset.tsx"/>
+<map version="1.10" tiledversion="1.10.1" orientation="orthogonal" renderorder="left-down" width="32" height="32" tilewidth="64" tileheight="64" infinite="0" nextlayerid="2" nextobjectid="1">
+ <tileset firstgid="1" name="default" tilewidth="64" tileheight="64" tilecount="299" columns="23" objectalignment="topleft">
+  <image source="towerDefense_tilesheet.png" width="1472" height="832"/>
+  <tile id="44">
+   <properties>
+    <property name="enemy_spawner" type="bool" value="true"/>
+   </properties>
+  </tile>
+  <tile id="45">
+   <properties>
+    <property name="enemy_finish" type="bool" value="true"/>
+   </properties>
+  </tile>
+ </tileset>
  <layer id="1" name="Calque de Tuiles 1" width="32" height="32">
   <data encoding="csv">
 163,163,163,163,163,163,163,163,163,163,163,163,163,163,163,163,163,163,163,163,163,163,163,163,163,163,163,163,163,163,163,163,

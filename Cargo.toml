@@ -1,0 +1,20 @@
+[package]
+name = "tower_defense"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
+
+[dependencies]
+bevy = { version = "0.10.1", features = ["dynamic_linking"] }
+rand = "0.8.5"
+bevy-inspector-egui = "0.18.3"
+bevy_ecs_tilemap = "0.10.0"
+tiled = { version = "0.10.2", default-features = false }
+anyhow = "1.0.70"
