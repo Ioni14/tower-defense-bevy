@@ -226,12 +226,9 @@ pub fn process_loaded_maps(
 
                         if let tiled::LayerType::ObjectLayer(object_layer) = layer.layer_type() {
                             for object_data in object_layer.object_data() {
-                                println!("tiled_map.map.height = {:?}", tiled_map.map.height);
                                 let mapped_x = object_data.x + offset_x;
-                                let mapped_y = (tiled_map.map.height - 1) as f32 * tile_size.y - (object_data.y + offset_y);
+                                let mapped_y = tiled_map.map.height as f32 * tile_size.y - (object_data.y + offset_y);
 
-                                println!("object {:?}", object_data);
-                                IntValue(3);
                                 match object_data.user_type.as_str() {
                                     "Waypoint" => {
                                         let IntValue(index) = object_data.properties["waypoint"] else {

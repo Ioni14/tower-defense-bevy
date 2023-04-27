@@ -1,6 +1,8 @@
+use bevy::input::mouse::MouseMotion;
 use bevy::math::Vec3Swizzles;
 use bevy::prelude::*;
 use bevy::sprite::Anchor;
+use bevy::window::PrimaryWindow;
 use bevy_ecs_tilemap::prelude::*;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 
@@ -42,6 +44,7 @@ fn main() {
         .add_system(projectile_follow_step)
         .add_system(do_move_step)
         .add_system(move_camera)
+        // .add_system(update_mouse_pos_display)
     ;
 
     app.run();
@@ -125,7 +128,7 @@ pub fn spawn_tower(mut commands: Commands, asset_server: Res<AssetServer>) {
 pub fn spawn_enemy(
     mut commands: Commands,
     mut enemy_spawner_query: Query<&mut EnemySpawner>,
-    tile_map_query: Query<&Transform, With<TileStorage>>,
+    tile_map_query: Query<(&GlobalTransform, &TilemapTileSize), With<TileStorage>>,
     time: Res<Time>,
 ) {
     // let enemy_waypoints = enemy_waypoints_query.single();
@@ -138,17 +141,18 @@ pub fn spawn_enemy(
         return;
     }
 
-    println!("Spawning enemy {:?}", enemy_spawner.position);
+    let (tilemap_transform, tile_size) = tile_map_query.single();
+    let tilemap_top_left = tilemap_transform.translation() - Vec3::new(tile_size.x / 2.0, tile_size.y / 2.0, 0.0);
 
     commands.spawn(
         (
             Enemy {},
             Velocity {
-                speed: 100.0,
+                speed: 0.0,//100.0,
                 direction: Vec2::new(1.0, 0.0),
             },
             SpriteBundle {
-                transform: Transform::from_translation(Vec3::from((enemy_spawner.position, 10.0)) + tile_map_query.single().translation),
+                transform: Transform::from_translation(Vec3::from((enemy_spawner.position, 10.0)) + tilemap_top_left),
                 // texture: asset_server.load("sprites/enemy.png"),
                 sprite: Sprite {
                     custom_size: Some(Vec2::splat(48.0)),
@@ -173,43 +177,28 @@ pub fn setup_map(
         tiled_map: map_handle,
         ..default()
     });
-    //
-    // let texture_handle: Handle<Image> = asset_server.load("sprites/towerDefense_tilesheet.png");
-    // let map_size = TilemapSize { x: 32, y: 32 };
-    //
-    // let tilemap_entity = commands.spawn_empty().id();
-    //
-    // let mut tile_storage = TileStorage::empty(map_size);
-    // for x in 0..map_size.x {
-    //     for y in 0..map_size.y {
-    //         let tile_pos = TilePos { x, y };
-    //         let tile_entity = commands
-    //             .spawn(TileBundle {
-    //                 position: tile_pos,
-    //                 tilemap_id: TilemapId(tilemap_entity),
-    //                 texture_index: TileTextureIndex(162),
-    //                 ..default()
-    //             })
-    //             .id();
-    //         tile_storage.set(&tile_pos, tile_entity);
-    //     }
-    // }
-    //
-    // let tile_size = TilemapTileSize { x: 64.0, y: 64.0 };
-    // let grid_size = tile_size.into();
-    // let map_type = TilemapType::Square;
-    //
-    // commands.entity(tilemap_entity)
-    //     .insert(TilemapBundle {
-    //         grid_size,
-    //         map_type,
-    //         size: map_size,
-    //         storage: tile_storage,
-    //         texture: TilemapTexture::Single(texture_handle),
-    //         tile_size,
-    //         transform: get_tilemap_center_transform(&map_size, &grid_size, &map_type, 0.0),
-    //         ..default()
-    //     });
+
+    commands.spawn(
+        (
+            Enemy {},
+            Velocity {
+                speed: 0.0,//100.0,
+                direction: Vec2::new(1.0, 0.0),
+            },
+            SpriteBundle {
+                transform: Transform::from_xyz(0.0, 0.0, 10.0),
+                // texture: asset_server.load("sprites/enemy.png"),
+                sprite: Sprite {
+                    custom_size: Some(Vec2::splat(48.0)),
+                    color: Color::rgb(1.0, 0.25, 0.25),
+                    anchor: Anchor::Center,
+                    ..default()
+                },
+                ..default()
+            },
+            Name::new("Enemy zero"),
+        ),
+    );
 }
 
 pub fn throw_projectiles(
@@ -329,4 +318,19 @@ pub fn move_camera(
         direction.x += 1.0;
     }
     camera_query.single_mut().translation += direction * CAMERA_SPEED * time.delta_seconds();
+}
+
+pub fn update_mouse_pos_display(
+    window: Query<&Window>,
+    mut cursor_evr: EventReader<CursorMoved>,
+    camera_query: Query<&Transform, With<Camera>>,
+) {
+    let w_x = window.get_single().unwrap().width();
+    let w_h = window.get_single().unwrap().height();
+    for ev in cursor_evr.iter() {
+        println!(
+            "New cursor position: X: {}, Y: {}, in Window ID: {:?}",
+            ev.position.x - w_x/2.0 + camera_query.single().translation.x, ev.position.y - w_h / 2.0 + camera_query.single().translation.y, ev.window.index()
+        );
+    }
 }
