@@ -40,11 +40,13 @@ fn main() {
 
     app
         .add_system(spawn_enemy)
+        .add_system(follow_waypoint)
+        .add_system(reach_waypoint)
         .add_system(throw_projectiles)
         .add_system(projectile_follow_step)
         .add_system(do_move_step)
         .add_system(move_camera)
-        // .add_system(update_mouse_pos_display)
+    // .add_system(update_mouse_pos_display)
     ;
 
     app.run();
@@ -94,6 +96,11 @@ pub struct Velocity {
     pub direction: Vec2,
 }
 
+#[derive(Component)]
+pub struct WaypointFollower {
+    pub index: i32,
+}
+
 pub fn setup_camera(mut commands: Commands) {
     commands.spawn(Camera2dBundle {
         transform: Transform::from_xyz(0.0, 0.0, 999.0),
@@ -131,7 +138,6 @@ pub fn spawn_enemy(
     tile_map_query: Query<(&GlobalTransform, &TilemapTileSize), With<TileStorage>>,
     time: Res<Time>,
 ) {
-    // let enemy_waypoints = enemy_waypoints_query.single();
     let Ok(mut enemy_spawner) = enemy_spawner_query.get_single_mut() else {
         return;
     };
@@ -148,8 +154,11 @@ pub fn spawn_enemy(
         (
             Enemy {},
             Velocity {
-                speed: 0.0,//100.0,
-                direction: Vec2::new(1.0, 0.0),
+                speed: 200.0,
+                direction: Vec2::new(0.0, 0.0),
+            },
+            WaypointFollower {
+                index: 0,
             },
             SpriteBundle {
                 transform: Transform::from_translation(Vec3::from((enemy_spawner.position, 10.0)) + tilemap_top_left),
@@ -165,6 +174,70 @@ pub fn spawn_enemy(
             Name::new("Enemy"),
         ),
     );
+}
+
+pub fn follow_waypoint(
+    mut commands: Commands,
+    mut follower_query: Query<(Entity, &WaypointFollower, &mut Velocity, &Transform)>,
+    finish_query: Query<&EnemyFinish>,
+    waypoints_query: Query<&Waypoint>,
+    tile_map_query: Query<(&GlobalTransform, &TilemapTileSize), With<TileStorage>>,
+) {
+    let Ok((tilemap_transform, tile_size)) = tile_map_query.get_single() else {
+        return;
+    };
+    let tilemap_top_left = tilemap_transform.translation() - Vec3::new(tile_size.x / 2.0, tile_size.y / 2.0, 0.0);
+
+    for (follower_entity, follower, mut velocity, transform) in follower_query.iter_mut() {
+        let Some(waypoint) = waypoints_query.iter().find(|waypoint| waypoint.index == follower.index) else {
+            if let Ok(finish) = finish_query.get_single() {
+                velocity.direction = ((finish.position + tilemap_top_left.xy()) - transform.translation.xy()).normalize();
+            } else {
+                // no finish : despawn now
+                commands.entity(follower_entity).despawn_recursive();
+            }
+
+            continue;
+        };
+
+        velocity.direction = ((waypoint.position + tilemap_top_left.xy()) - transform.translation.xy()).normalize();
+    }
+}
+
+pub fn reach_waypoint(
+    mut commands: Commands,
+    mut follower_query: Query<(Entity, &mut WaypointFollower, &Transform)>,
+    finish_query: Query<&EnemyFinish>,
+    waypoints_query: Query<&Waypoint>,
+    tile_map_query: Query<(&GlobalTransform, &TilemapTileSize), With<TileStorage>>,
+) {
+    let Ok((tilemap_transform, tile_size)) = tile_map_query.get_single() else {
+        return;
+    };
+    let tilemap_top_left = tilemap_transform.translation() - Vec3::new(tile_size.x / 2.0, tile_size.y / 2.0, 0.0);
+
+    for (follower_entity, mut follower,transform) in follower_query.iter_mut() {
+
+        // TODO : optimiser en mettant dans le composant directement la position du prochain waypoint
+
+        let Some(waypoint) = waypoints_query.iter().find(|waypoint| waypoint.index == follower.index) else {
+            // finish ?
+            let Ok(finish) = finish_query.get_single() else {
+                continue;
+            };
+
+            if ((finish.position + tilemap_top_left.xy()) - transform.translation.xy()).length_squared() < 1.0 {
+                // finish reached : TODO : publish event, update score...
+                commands.entity(follower_entity).despawn_recursive();
+            }
+
+            continue;
+        };
+
+        if ((waypoint.position + tilemap_top_left.xy()) - transform.translation.xy()).length_squared() < 1.0 {
+            follower.index += 1;
+        }
+    }
 }
 
 pub fn setup_map(
@@ -330,7 +403,7 @@ pub fn update_mouse_pos_display(
     for ev in cursor_evr.iter() {
         println!(
             "New cursor position: X: {}, Y: {}, in Window ID: {:?}",
-            ev.position.x - w_x/2.0 + camera_query.single().translation.x, ev.position.y - w_h / 2.0 + camera_query.single().translation.y, ev.window.index()
+            ev.position.x - w_x / 2.0 + camera_query.single().translation.x, ev.position.y - w_h / 2.0 + camera_query.single().translation.y, ev.window.index()
         );
     }
 }
