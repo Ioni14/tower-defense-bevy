@@ -1,17 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<map version="1.10" tiledversion="1.10.1" orientation="orthogonal" renderorder="left-down" width="32" height="32" tilewidth="64" tileheight="64" infinite="0" nextlayerid="2" nextobjectid="1">
+<map version="1.10" tiledversion="1.10.1" orientation="orthogonal" renderorder="left-down" width="32" height="32" tilewidth="64" tileheight="64" infinite="0" nextlayerid="3" nextobjectid="31">
  <tileset firstgid="1" name="default" tilewidth="64" tileheight="64" tilecount="299" columns="23" objectalignment="topleft">
   <image source="towerDefense_tilesheet.png" width="1472" height="832"/>
-  <tile id="44">
-   <properties>
-    <property name="enemy_spawner" type="bool" value="true"/>
-   </properties>
-  </tile>
-  <tile id="45">
-   <properties>
-    <property name="enemy_finish" type="bool" value="true"/>
-   </properties>
-  </tile>
  </tileset>
  <layer id="1" name="Calque de Tuiles 1" width="32" height="32">
   <data encoding="csv">
@@ -49,4 +39,66 @@
 163,163,163,163,163,163,163,163,163,163,163,163,163,163,163,163,163,163,163,163,163,163,163,163,163,163,163,163,163,163,163,163
 </data>
  </layer>
+ <objectgroup id="2" name="Calque d'Objets 1">
+  <object id="20" name="wp 0" type="Waypoint" x="1762" y="162">
+   <properties>
+    <property name="waypoint" type="int" value="0"/>
+   </properties>
+   <point/>
+  </object>
+  <object id="21" name="wp 1" type="Waypoint" x="1762" y="801">
+   <properties>
+    <property name="waypoint" type="int" value="1"/>
+   </properties>
+   <point/>
+  </object>
+  <object id="22" name="wp 2" type="Waypoint" x="609" y="801">
+   <properties>
+    <property name="waypoint" type="int" value="2"/>
+   </properties>
+   <point/>
+  </object>
+  <object id="23" name="wp 3" type="Waypoint" x="609" y="1186">
+   <properties>
+    <property name="waypoint" type="int" value="3"/>
+   </properties>
+   <point/>
+  </object>
+  <object id="24" name="wp 4" type="Waypoint" x="225" y="1186">
+   <properties>
+    <property name="waypoint" type="int" value="4"/>
+   </properties>
+   <point/>
+  </object>
+  <object id="25" name="wp 5" type="Waypoint" x="226" y="1699">
+   <properties>
+    <property name="waypoint" type="int" value="5"/>
+   </properties>
+   <point/>
+  </object>
+  <object id="26" name="wp 6" type="Waypoint" x="1315" y="1700">
+   <properties>
+    <property name="waypoint" type="int" value="6"/>
+   </properties>
+   <point/>
+  </object>
+  <object id="27" name="wp 7" type="Waypoint" x="1317" y="1058">
+   <properties>
+    <property name="waypoint" type="int" value="7"/>
+   </properties>
+   <point/>
+  </object>
+  <object id="28" name="wp 8" type="Waypoint" x="1826" y="1059">
+   <properties>
+    <property name="waypoint" type="int" value="8"/>
+   </properties>
+   <point/>
+  </object>
+  <object id="29" name="finish" type="EnemyFinish" x="1826" y="1887">
+   <point/>
+  </object>
+  <object id="30" name="spawner" type="EnemySpawner" x="96" y="160">
+   <point/>
+  </object>
+ </objectgroup>
 </map>

@@ -1,36 +1,19 @@
-// How to use this:
-//   You should copy/paste this into your project and use it much like examples/tiles.rs uses this
-//   file. When you do so you will need to adjust the code based on whether you're using the
-//   'atlas` feature in bevy_ecs_tilemap. The bevy_ecs_tilemap uses this as an example of how to
-//   use both single image tilesets and image collection tilesets. Since your project won't have
-//   the 'atlas' feature defined in your Cargo config, the expressions prefixed by the #[cfg(...)]
-//   macro will not compile in your project as-is. If your project depends on the bevy_ecs_tilemap
-//   'atlas' feature then move all of the expressions prefixed by #[cfg(not(feature = "atlas"))].
-//   Otherwise remove all of the expressions prefixed by #[cfg(feature = "atlas")].
-//
-// Functional limitations:
-//   * When the 'atlas' feature is enabled tilesets using a collection of images will be skipped.
-//   * Only finite tile layers are loaded. Infinite tile layers and object layers will be skipped.
-
 use std::io::BufReader;
 
+use anyhow::Result;
 use bevy::{
     asset::{AssetLoader, AssetPath, LoadedAsset},
     log,
-    prelude::{
-        AddAsset, Added, AssetEvent, Assets, Bundle, Commands, Component, DespawnRecursiveExt,
-        Entity, EventReader, GlobalTransform, Handle, Image, Plugin, Query, Res, Transform,
-    },
+    prelude::*,
     reflect::TypeUuid,
+    time::*,
     utils::HashMap,
 };
 use bevy_ecs_tilemap::prelude::*;
+use tiled::PropertyValue::IntValue;
 
-use anyhow::Result;
-use bevy::prelude::Timer;
-use bevy::time::TimerMode;
-use tiled::PropertyValue;
-use crate::{EnemyFinish, EnemySpawner};
+// use tiled::PropertyValue;
+use crate::{EnemyFinish, EnemySpawner, Waypoint};
 
 #[derive(Default)]
 pub struct TiledMapPlugin;
@@ -162,7 +145,7 @@ impl AssetLoader for TiledLoader {
 
 pub fn process_loaded_maps(
     mut commands: Commands,
-    mut map_events: EventReader<AssetEvent<TiledMap>>,
+    // mut map_events: EventReader<AssetEvent<TiledMap>>,
     maps: Res<Assets<TiledMap>>,
     tile_storage_query: Query<(Entity, &TileStorage)>,
     mut map_query: Query<(&Handle<TiledMap>, &mut TiledLayersStorage)>,
@@ -202,7 +185,6 @@ pub fn process_loaded_maps(
                 continue;
             }
             if let Some(tiled_map) = maps.get(map_handle) {
-                // TODO: Create a RemoveMap component..
                 for layer_entity in layer_storage.storage.values() {
                     if let Ok((_, layer_tile_storage)) = tile_storage_query.get(*layer_entity) {
                         for tile in layer_tile_storage.iter().flatten() {
@@ -241,6 +223,43 @@ pub fn process_loaded_maps(
                         println!("layer");
                         let offset_x = layer.offset_x;
                         let offset_y = layer.offset_y;
+
+                        if let tiled::LayerType::ObjectLayer(object_layer) = layer.layer_type() {
+                            for object_data in object_layer.object_data() {
+                                println!("tiled_map.map.height = {:?}", tiled_map.map.height);
+                                let mapped_x = object_data.x + offset_x;
+                                let mapped_y = (tiled_map.map.height - 1) as f32 * tile_size.y - (object_data.y + offset_y);
+
+                                println!("object {:?}", object_data);
+                                IntValue(3);
+                                match object_data.user_type.as_str() {
+                                    "Waypoint" => {
+                                        let IntValue(index) = object_data.properties["waypoint"] else {
+                                            log::warn!("Skipped entity waypoint because no waypoint property found.");
+                                            continue;
+                                        };
+                                        commands.spawn(Waypoint {
+                                            index,
+                                            position: Vec2::new(mapped_x, mapped_y),
+                                        }).insert(Name::new(object_data.name.clone()));
+                                    }
+                                    "EnemyFinish" => {
+                                        commands.spawn(EnemyFinish {
+                                            position: Vec2::new(mapped_x, mapped_y),
+                                        }).insert(Name::new(object_data.name.clone()));
+                                    }
+                                    "EnemySpawner" => {
+                                        commands.spawn(EnemySpawner {
+                                            position: Vec2::new(mapped_x, mapped_y),
+                                            timer: Timer::from_seconds(2.0, TimerMode::Repeating),
+                                        }).insert(Name::new(object_data.name.clone()));
+                                    }
+                                    _ => {}
+                                }
+                            }
+
+                            continue;
+                        }
 
                         let tiled::LayerType::TileLayer(tile_layer) = layer.layer_type() else {
                             log::info!(
@@ -309,16 +328,16 @@ pub fn process_loaded_maps(
                                         }
                                     };
 
-                                let tile = match layer_tile.get_tile() {
-                                    Some(t) => t,
-                                    None => {
-                                        continue;
-                                    }
-                                };
-                                let tile_properties = &tile.properties;
-                                if ! tile_properties.is_empty() {
-                                    println!("tile properties of {:?}: {:?}", layer_tile.id(), tile_properties);
-                                }
+                                // let tile = match layer_tile.get_tile() {
+                                //     Some(t) => t,
+                                //     None => {
+                                //         continue;
+                                //     }
+                                // };
+                                // let tile_properties = &tile.properties;
+                                // if ! tile_properties.is_empty() {
+                                //     println!("tile properties of {:?}: {:?}", layer_tile.id(), tile_properties);
+                                // }
 
                                 let texture_index = match tilemap_texture {
                                     TilemapTexture::Single(_) => layer_tile.id(),
@@ -331,7 +350,7 @@ pub fn process_loaded_maps(
                                 };
 
                                 let tile_pos = TilePos { x, y };
-                                let mut tile_entity_builder = commands
+                                let tile_entity_builder = commands
                                     .spawn(TileBundle {
                                         position: tile_pos,
                                         tilemap_id: TilemapId(layer_entity),
@@ -344,14 +363,14 @@ pub fn process_loaded_maps(
                                         ..Default::default()
                                     });
 
-                                if let Some(PropertyValue::BoolValue(true)) = tile_properties.get("enemy_spawner") {
-                                    tile_entity_builder.insert(EnemySpawner {
-                                        timer: Timer::from_seconds(2.0, TimerMode::Repeating)
-                                    });
-                                }
-                                if let Some(PropertyValue::BoolValue(true)) = tile_properties.get("enemy_finish") {
-                                    tile_entity_builder.insert(EnemyFinish {});
-                                }
+                                // if let Some(PropertyValue::BoolValue(true)) = tile_properties.get("enemy_spawner") {
+                                //     tile_entity_builder.insert(EnemySpawner {
+                                //         timer: Timer::from_seconds(2.0, TimerMode::Repeating)
+                                //     });
+                                // }
+                                // if let Some(PropertyValue::BoolValue(true)) = tile_properties.get("enemy_finish") {
+                                //     tile_entity_builder.insert(EnemyFinish {});
+                                // }
 
                                 let tile_entity = tile_entity_builder.id();
                                 tile_storage.set(&tile_pos, tile_entity);
