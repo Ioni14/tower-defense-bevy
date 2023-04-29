@@ -325,6 +325,7 @@ pub fn process_loaded_maps(
                                         }
                                     };
 
+                                // TODO : if we want properties of tiles
                                 // let tile = match layer_tile.get_tile() {
                                 //     Some(t) => t,
                                 //     None => {
@@ -359,15 +360,6 @@ pub fn process_loaded_maps(
                                         },
                                         ..Default::default()
                                     });
-
-                                // if let Some(PropertyValue::BoolValue(true)) = tile_properties.get("enemy_spawner") {
-                                //     tile_entity_builder.insert(EnemySpawner {
-                                //         timer: Timer::from_seconds(2.0, TimerMode::Repeating)
-                                //     });
-                                // }
-                                // if let Some(PropertyValue::BoolValue(true)) = tile_properties.get("enemy_finish") {
-                                //     tile_entity_builder.insert(EnemyFinish {});
-                                // }
 
                                 let tile_entity = tile_entity_builder.id();
                                 tile_storage.set(&tile_pos, tile_entity);

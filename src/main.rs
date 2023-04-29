@@ -1,7 +1,9 @@
 use bevy::input::mouse::MouseMotion;
 use bevy::math::Vec3Swizzles;
 use bevy::prelude::*;
-use bevy::sprite::Anchor;
+use bevy::render::{Extract, RenderApp};
+use bevy::render::texture::DEFAULT_IMAGE_HANDLE;
+use bevy::sprite::{Anchor, ExtractedSprite, ExtractedSprites, SpriteSystem};
 use bevy::window::PrimaryWindow;
 use bevy_ecs_tilemap::prelude::*;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
@@ -16,6 +18,7 @@ fn main() {
     let mut app = App::new();
 
     app.insert_resource(ClearColor(Color::rgb(0.2, 0.2, 0.2)));
+    app.insert_resource(Msaa::Off);
     app.add_plugins(DefaultPlugins
         .set(WindowPlugin {
             primary_window: Some(Window {
@@ -32,6 +35,19 @@ fn main() {
     app.add_plugin(TilemapPlugin);
     app.add_plugin(tiled::TiledMapPlugin);
 
+    app.add_event::<ProjectileHitEvent>();
+    app.add_event::<KilledEvent>();
+
+    if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
+        render_app
+            .add_systems(
+                (
+                    extract_health_bar.after(SpriteSystem::ExtractSprites),
+                )
+                    .in_schedule(ExtractSchedule),
+            );
+    };
+
     app
         .add_startup_system(setup_camera)
         .add_startup_system(setup_map)
@@ -46,6 +62,8 @@ fn main() {
         .add_system(projectile_follow_step)
         .add_system(do_move_step)
         .add_system(move_camera)
+        .add_system(deal_projectile_damage)
+        .add_system(on_enemy_killed)
     // .add_system(update_mouse_pos_display)
     ;
 
@@ -57,6 +75,12 @@ pub struct Tower {}
 
 #[derive(Component)]
 pub struct Enemy {}
+
+#[derive(Component)]
+pub struct Health {
+    pub current: i32,
+    pub max: i32,
+}
 
 #[derive(Component)]
 pub struct Waypoint {
@@ -79,10 +103,13 @@ pub struct EnemyFinish {
 pub struct ProjectileThrower {
     pub relative_start: Vec2,
     pub cooldown: Timer,
+    pub range: f32,
 }
 
 #[derive(Component)]
-pub struct Projectile {}
+pub struct Projectile {
+    damage: i32,
+}
 
 #[derive(Component)]
 pub struct Follower {
@@ -101,6 +128,21 @@ pub struct WaypointFollower {
     pub index: i32,
 }
 
+#[derive(Component)]
+pub struct Healthbar {
+    pub length: f32,
+    pub height: f32,
+}
+
+pub struct ProjectileHitEvent {
+    pub damage: f32,
+    pub target: Entity,
+}
+
+pub struct KilledEvent {
+    who: Entity,
+}
+
 pub fn setup_camera(mut commands: Commands) {
     commands.spawn(Camera2dBundle {
         transform: Transform::from_xyz(0.0, 0.0, 999.0),
@@ -114,7 +156,8 @@ pub fn spawn_tower(mut commands: Commands, asset_server: Res<AssetServer>) {
             Tower {},
             ProjectileThrower {
                 relative_start: Vec2::new(0.0, 2.0 / 3.0 * 64.0),
-                cooldown: Timer::from_seconds(0.1, TimerMode::Repeating),
+                cooldown: Timer::from_seconds(1.0, TimerMode::Repeating),
+                range: 450.0,
             },
             SpriteBundle {
                 transform: Transform::from_xyz(-128.0, -128.0, 10.0),
@@ -135,6 +178,7 @@ pub fn spawn_tower(mut commands: Commands, asset_server: Res<AssetServer>) {
 pub fn spawn_enemy(
     mut commands: Commands,
     mut enemy_spawner_query: Query<&mut EnemySpawner>,
+    asset_server: Res<AssetServer>,
     tile_map_query: Query<(&GlobalTransform, &TilemapTileSize), With<TileStorage>>,
     time: Res<Time>,
 ) {
@@ -153,6 +197,14 @@ pub fn spawn_enemy(
     commands.spawn(
         (
             Enemy {},
+            Health {
+                current: 100,
+                max: 100,
+            },
+            Healthbar {
+                length: 64.0,
+                height: 10.0,
+            },
             Velocity {
                 speed: 200.0,
                 direction: Vec2::new(0.0, 0.0),
@@ -162,10 +214,8 @@ pub fn spawn_enemy(
             },
             SpriteBundle {
                 transform: Transform::from_translation(Vec3::from((enemy_spawner.position, 10.0)) + tilemap_top_left),
-                // texture: asset_server.load("sprites/enemy.png"),
+                texture: asset_server.load("sprites/enemy_1.png"),
                 sprite: Sprite {
-                    custom_size: Some(Vec2::splat(48.0)),
-                    color: Color::rgb(1.0, 0.25, 0.25),
                     anchor: Anchor::Center,
                     ..default()
                 },
@@ -216,7 +266,7 @@ pub fn reach_waypoint(
     };
     let tilemap_top_left = tilemap_transform.translation() - Vec3::new(tile_size.x / 2.0, tile_size.y / 2.0, 0.0);
 
-    for (follower_entity, mut follower,transform) in follower_query.iter_mut() {
+    for (follower_entity, mut follower, transform) in follower_query.iter_mut() {
 
         // TODO : optimiser en mettant dans le composant directement la position du prochain waypoint
 
@@ -250,28 +300,6 @@ pub fn setup_map(
         tiled_map: map_handle,
         ..default()
     });
-
-    commands.spawn(
-        (
-            Enemy {},
-            Velocity {
-                speed: 0.0,//100.0,
-                direction: Vec2::new(1.0, 0.0),
-            },
-            SpriteBundle {
-                transform: Transform::from_xyz(0.0, 0.0, 10.0),
-                // texture: asset_server.load("sprites/enemy.png"),
-                sprite: Sprite {
-                    custom_size: Some(Vec2::splat(48.0)),
-                    color: Color::rgb(1.0, 0.25, 0.25),
-                    anchor: Anchor::Center,
-                    ..default()
-                },
-                ..default()
-            },
-            Name::new("Enemy zero"),
-        ),
-    );
 }
 
 pub fn throw_projectiles(
@@ -288,13 +316,19 @@ pub fn throw_projectiles(
         }
         let mut closest_enemy: Option<(Entity, &Transform)> = None;
         for (enemy_entity, enemy_transform) in enemies_query.iter() {
+            let distance_to_enemy = (enemy_transform.translation - thrower_transform.translation).length_squared();
+
+            if distance_to_enemy > projectile_thrower.range * projectile_thrower.range {
+                continue;
+            }
+
             if closest_enemy.is_none() {
                 closest_enemy = Some((enemy_entity, enemy_transform));
                 continue;
             }
-            if (enemy_transform.translation - thrower_transform.translation).length_squared()
-                < (closest_enemy.unwrap().1.translation - thrower_transform.translation)
-                .length_squared()
+
+            let distance_to_closest_enemy = (closest_enemy.unwrap().1.translation - thrower_transform.translation).length_squared();
+            if distance_to_enemy < distance_to_closest_enemy
             {
                 closest_enemy = Some((enemy_entity, enemy_transform));
             }
@@ -308,9 +342,11 @@ pub fn throw_projectiles(
 
         commands.spawn(
             (
-                Projectile {},
+                Projectile {
+                    damage: 40,
+                },
                 Follower {
-                    speed: 400.0,
+                    speed: 800.0,
                     target: closest_enemy.unwrap().0,
                 },
                 SpriteBundle {
@@ -322,8 +358,6 @@ pub fn throw_projectiles(
                     ).with_scale(Vec3::splat(0.25)),
                     texture: asset_server.load("sprites/arrow.png"),
                     sprite: Sprite {
-                        // custom_size: Some(Vec2::splat(32.0)),
-                        // color: Color::rgb(0.5, 0.0, 1.0),
                         anchor: Anchor::CenterRight,
                         ..default()
                     },
@@ -337,11 +371,12 @@ pub fn throw_projectiles(
 
 pub fn projectile_follow_step(
     mut commands: Commands,
-    mut projectile_query: Query<(Entity, &Follower, &mut Transform), With<Projectile>>,
+    mut projectile_query: Query<(Entity, &Follower, &mut Transform, &Projectile)>,
+    mut projectile_hit_event_writer: EventWriter<ProjectileHitEvent>,
     target_query: Query<&Transform, Without<Projectile>>,
     time: Res<Time>,
 ) {
-    for (follower_entity, follower, mut follower_transform) in projectile_query.iter_mut() {
+    for (follower_entity, follower, mut follower_transform, projectile) in projectile_query.iter_mut() {
         if let Ok(target_transform) = target_query.get(follower.target) {
             let direction_to_target = (target_transform.translation - follower_transform.translation).xy().normalize();
             follower_transform.translation += Vec3::from((direction_to_target, 0.0)) * follower.speed * time.delta_seconds();
@@ -352,14 +387,49 @@ pub fn projectile_follow_step(
 
             // check if projectile is close enough to target
             if (target_transform.translation - follower_transform.translation).length_squared() < 20.0 * 20.0 {
-                // hit target (event?)
+                projectile_hit_event_writer.send(ProjectileHitEvent {
+                    damage: projectile.damage as f32,
+                    target: follower.target,
+                });
                 commands.entity(follower_entity).despawn_recursive();
             }
         } else {
-            // target does not exist anymore, despawn projectile
+            // target does not exist anymore (e.g. reached finish waypoint), despawn projectile
             commands.entity(follower_entity).despawn_recursive();
             continue;
         }
+    }
+}
+
+pub fn deal_projectile_damage(
+    mut projectile_hit_event_reader: EventReader<ProjectileHitEvent>,
+    mut health_query: Query<&mut Health>,
+    mut event_writer: EventWriter<KilledEvent>,
+) {
+    for event in projectile_hit_event_reader.iter() {
+        let Ok(mut target_health) = health_query.get_mut(event.target) else {
+            // does not exist anymore
+            continue;
+        };
+        target_health.current -= (event.damage) as i32;
+        if target_health.current <= 0 {
+            event_writer.send(KilledEvent {
+                who: event.target,
+            });
+        }
+    }
+}
+
+pub fn on_enemy_killed(
+    mut commands: Commands,
+    mut event_reader: EventReader<KilledEvent>,
+    enemy_query: Query<&Enemy>,
+) {
+    for event in event_reader.iter() {
+        enemy_query.get(event.who).ok().map(|enemy| {
+            // TODO : add points ?
+            commands.entity(event.who).despawn_recursive();
+        });
     }
 }
 
@@ -369,6 +439,10 @@ pub fn do_move_step(
 ) {
     for (velocity, mut transform) in move_query.iter_mut() {
         transform.translation += Vec3::from((velocity.direction, 0.0)) * velocity.speed * time.delta_seconds();
+        transform.rotation = Quat::from_rotation_arc_2d(
+            Vec2::new(1.0, 0.0),
+            velocity.direction,
+        );
     }
 }
 
@@ -405,5 +479,62 @@ pub fn update_mouse_pos_display(
             "New cursor position: X: {}, Y: {}, in Window ID: {:?}",
             ev.position.x - w_x / 2.0 + camera_query.single().translation.x, ev.position.y - w_h / 2.0 + camera_query.single().translation.y, ev.window.index()
         );
+    }
+}
+
+pub fn extract_health_bar(
+    mut extracted_sprites: ResMut<ExtractedSprites>,
+    healthbar_query: Extract<
+        Query<(
+            Entity,
+            &Healthbar,
+            &Health,
+            &ComputedVisibility,
+            &GlobalTransform,
+        )>,
+    >,
+) {
+    for (healthbar_entity, healthbar, health, healthbar_visibility, entity_transform) in healthbar_query.iter() {
+        if !healthbar_visibility.is_visible() {
+            continue;
+        }
+
+        let mut background_translation = entity_transform.translation();
+        background_translation.x -= healthbar.length / 2.0;
+        background_translation.y += 32.0;
+        background_translation.z = 50.0;
+
+        // background
+        extracted_sprites.sprites.push(ExtractedSprite {
+            entity: healthbar_entity,
+            transform: GlobalTransform::from(Transform::from_translation(background_translation)),
+            custom_size: Some(Vec2::new(healthbar.length, healthbar.height)),
+            color: Color::rgb(0.2, 0.2, 0.2),
+            anchor: Anchor::CenterLeft.as_vec(),
+            flip_x: false,
+            flip_y: false,
+            rect: None,
+            image_handle_id: DEFAULT_IMAGE_HANDLE.into(),
+        });
+
+        // current life
+        let padding = 2.0;
+        let health_percent = health.current as f32 / health.max as f32;
+        let width = healthbar.length * health_percent;
+        let mut healthbar_translation = background_translation.clone();
+        healthbar_translation.x += padding; // "left border"
+        healthbar_translation.z += 1.0; // in front of background
+
+        extracted_sprites.sprites.push(ExtractedSprite {
+            entity: healthbar_entity,
+            transform: GlobalTransform::from(Transform::from_translation(healthbar_translation)),
+            custom_size: Some(Vec2::new(width - padding * 2.0, healthbar.height - padding * 2.0)),
+            color: Color::rgb(0.0, 1.0, 0.25),
+            anchor: Anchor::CenterLeft.as_vec(),
+            flip_x: false,
+            flip_y: false,
+            rect: None,
+            image_handle_id: DEFAULT_IMAGE_HANDLE.into(),
+        });
     }
 }
