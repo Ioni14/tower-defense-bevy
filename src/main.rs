@@ -100,6 +100,8 @@ impl Health {
 
 #[derive(Component)]
 pub struct SelectedForBuild {}
+#[derive(Component)]
+pub struct BuiltTile {}
 
 #[derive(Component)]
 pub struct Waypoint {
@@ -201,6 +203,7 @@ pub fn select_build_zone(
     cursor_pos: Res<CursorPos>,
     selected_for_build_q: Query<Entity, With<SelectedForBuild>>,
     build_zones_q: Query<&BuildZone>,
+    Built_tiles_q: Query<&BuiltTile>,
     tilemap_q: Query<(
         &TilemapSize,
         &TilemapGridSize,
@@ -232,12 +235,12 @@ pub fn select_build_zone(
         };
 
         // Once we have a world position we can transform it into a possible tile position.
-        let Some(tile_pos) = TilePos::from_world_pos(&cursor_in_map_pos, map_size, grid_size, map_type) else {
+        let Some(tile_pos) = TilePos::from_world_pos(&cursor_in_map_pos, &map_size, &grid_size, &map_type) else {
             continue;
         };
 
         // check if tile is in build zone
-        let tile_center_pos_world = tile_pos.center_in_world(grid_size, map_type) + Vec2::new(tile_size.x / 2.0, tile_size.y / 2.0);
+        let tile_center_pos_world = tile_pos.center_in_world(&grid_size, &map_type) + Vec2::new(tile_size.x / 2.0, tile_size.y / 2.0);
         let mut in_build_zone = false;
         for build_zone in build_zones_q.iter() {
             let mut rect = build_zone.rect;
@@ -254,6 +257,11 @@ pub fn select_build_zone(
             continue;
         };
 
+        if Built_tiles_q.get(tile_entity).is_ok() {
+            // a building is already on this tile
+            continue;
+        }
+
         commands.entity(tile_entity).insert(SelectedForBuild {
             // previousColor: Some(color),
         });
@@ -269,15 +277,15 @@ pub fn select_build_zone(
 pub fn build_tower_at_click(
     mut commands: Commands,
     mut clicked_event_reader: EventReader<MouseButtonInput>,
-    selected_for_build_tile_q: Query<(&TilePos), With<SelectedForBuild>>,
+    selected_for_build_tile_q: Query<(Entity, &TilePos), With<SelectedForBuild>>,
     tilemap_q: Query<(&TilemapGridSize, &TilemapType, &GlobalTransform)>,
     asset_server: Res<AssetServer>,
 ) {
     for click in clicked_event_reader.iter() {
-        if click.button != MouseButton::Left || click.state != ButtonState::Pressed {
+        if click.button != MouseButton::Left || click.state != ButtonState::Released {
             continue;
         }
-        let Ok(tile_pos) = selected_for_build_tile_q.get_single() else {
+        let Ok((tile_entity, tile_pos)) = selected_for_build_tile_q.get_single() else {
             return;
         };
         let Ok((tilemap_grid_size, tilemap_type, tilemap_transform)) = tilemap_q.get_single() else {
@@ -286,6 +294,7 @@ pub fn build_tower_at_click(
 
         let tile_world_pos = tile_pos.center_in_world(&tilemap_grid_size, &tilemap_type);
 
+        commands.entity(tile_entity).insert(BuiltTile {});
         commands.spawn(
             (
                 Tower {},
