@@ -1,5 +1,7 @@
-use bevy::input::mouse::MouseMotion;
-use bevy::math::Vec3Swizzles;
+use std::thread::current;
+use bevy::input::ButtonState;
+use bevy::input::mouse::{MouseButtonInput, MouseMotion};
+use bevy::math::{Vec3Swizzles, Vec4Swizzles};
 use bevy::prelude::*;
 use bevy::render::{Extract, RenderApp};
 use bevy::render::texture::DEFAULT_IMAGE_HANDLE;
@@ -7,8 +9,6 @@ use bevy::sprite::{Anchor, ExtractedSprite, ExtractedSprites, SpriteSystem};
 use bevy::window::PrimaryWindow;
 use bevy_ecs_tilemap::prelude::*;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
-
-// use rand::prelude::*;
 
 mod tiled;
 
@@ -19,6 +19,7 @@ fn main() {
 
     app.insert_resource(ClearColor(Color::rgb(0.2, 0.2, 0.2)));
     app.insert_resource(Msaa::Off);
+    app.init_resource::<CursorPos>();
     app.add_plugins(DefaultPlugins
         .set(WindowPlugin {
             primary_window: Some(Window {
@@ -51,7 +52,6 @@ fn main() {
     app
         .add_startup_system(setup_camera)
         .add_startup_system(setup_map)
-        .add_startup_system(spawn_tower.after(setup_map))
     ;
 
     app
@@ -64,10 +64,22 @@ fn main() {
         .add_system(move_camera)
         .add_system(deal_projectile_damage)
         .add_system(on_enemy_killed)
+        .add_system(update_cursor_pos)
+        .add_system(select_build_zone)
+        .add_system(build_tower_at_click)
     // .add_system(update_mouse_pos_display)
     ;
 
     app.run();
+}
+
+#[derive(Resource)]
+pub struct CursorPos(Vec2);
+
+impl Default for CursorPos {
+    fn default() -> Self {
+        Self(Vec2::new(0.0, 0.0))
+    }
 }
 
 #[derive(Component)]
@@ -82,10 +94,22 @@ pub struct Health {
     pub max: i32,
 }
 
+impl Health {
+    pub fn full(max: i32) -> Self { Health { current: max, max } }
+}
+
+#[derive(Component)]
+pub struct SelectedForBuild {}
+
 #[derive(Component)]
 pub struct Waypoint {
     pub index: i32,
     pub position: Vec2,
+}
+
+#[derive(Component)]
+pub struct BuildZone {
+    rect: Rect,
 }
 
 #[derive(Component)]
@@ -150,29 +174,139 @@ pub fn setup_camera(mut commands: Commands) {
     });
 }
 
-pub fn spawn_tower(mut commands: Commands, asset_server: Res<AssetServer>) {
-    commands.spawn(
-        (
-            Tower {},
-            ProjectileThrower {
-                relative_start: Vec2::new(0.0, 2.0 / 3.0 * 64.0),
-                cooldown: Timer::from_seconds(1.0, TimerMode::Repeating),
-                range: 450.0,
-            },
-            SpriteBundle {
-                transform: Transform::from_xyz(-128.0, -128.0, 10.0),
-                // texture: asset_server.load("sprites/tower.png"),
-                sprite: Sprite {
-                    custom_size: Some(Vec2::splat(64.0)),
-                    color: Color::rgb(0.0, 1.0, 0.5),
-                    anchor: Anchor::BottomCenter,
+pub fn update_cursor_pos(
+    mut cursor_event_reader: EventReader<CursorMoved>,
+    mut cursor_pos: ResMut<CursorPos>,
+    camera_q: Query<(&GlobalTransform, &Camera)>,
+) {
+    for cursor_moved in cursor_event_reader.iter() {
+        // To get the mouse's world position, we have to transform its window position by
+        // any transforms on the camera. This is done by projecting the cursor position into
+        // camera space (world space).
+        for (cam_t, cam) in camera_q.iter() {
+            if let Some(pos) = cam.viewport_to_world_2d(cam_t, cursor_moved.position) {
+                *cursor_pos = CursorPos(pos);
+            }
+        }
+    }
+}
+
+/**
+ * When we move the mouse over the tilemap, the targeted tile should be highlighted.
+ * see https://github.com/StarArawn/bevy_ecs_tilemap/blob/main/examples/mouse_to_tile.rs#L315
+ */
+pub fn select_build_zone(
+    mut commands: Commands,
+    mut tile_color_q: Query<&mut TileColor>,
+    cursor_pos: Res<CursorPos>,
+    selected_for_build_q: Query<Entity, With<SelectedForBuild>>,
+    build_zones_q: Query<&BuildZone>,
+    tilemap_q: Query<(
+        &TilemapSize,
+        &TilemapGridSize,
+        &TilemapType,
+        &TileStorage,
+        &GlobalTransform,
+        &TilemapTileSize,
+    )>,
+) {
+    // TODO : only if cursor pos has changed
+
+    for selected_for_build_entity in selected_for_build_q.iter() {
+        if let Ok(mut color) = tile_color_q.get_mut(selected_for_build_entity) {
+            *color = TileColor(Color::WHITE);
+        }
+        commands.entity(selected_for_build_entity).remove::<SelectedForBuild>();
+    }
+
+    for (map_size, grid_size, map_type, tile_storage, map_transform, tile_size) in tilemap_q.iter() {
+        // Grab the cursor position from the `Res<CursorPos>`
+        let cursor_pos: Vec2 = cursor_pos.0;
+        // We need to make sure that the cursor's world position is correct relative to the map
+        // due to any map transformation.
+        let cursor_in_map_pos: Vec2 = {
+            // Extend the cursor_pos vec3 by 0.0 and 1.0
+            let cursor_pos = Vec4::from((cursor_pos, 0.0, 1.0));
+            let cursor_in_map_pos = map_transform.compute_matrix().inverse() * cursor_pos;
+            cursor_in_map_pos.xy()
+        };
+
+        // Once we have a world position we can transform it into a possible tile position.
+        let Some(tile_pos) = TilePos::from_world_pos(&cursor_in_map_pos, map_size, grid_size, map_type) else {
+            continue;
+        };
+
+        // check if tile is in build zone
+        let tile_center_pos_world = tile_pos.center_in_world(grid_size, map_type) + Vec2::new(tile_size.x / 2.0, tile_size.y / 2.0);
+        let mut in_build_zone = false;
+        for build_zone in build_zones_q.iter() {
+            let mut rect = build_zone.rect;
+            if rect.contains(tile_center_pos_world) {
+                in_build_zone = true;
+                break;
+            }
+        }
+        if !in_build_zone {
+            continue;
+        }
+
+        let Some(tile_entity) = tile_storage.get(&tile_pos) else {
+            continue;
+        };
+
+        commands.entity(tile_entity).insert(SelectedForBuild {
+            // previousColor: Some(color),
+        });
+        if let Ok(mut color) = tile_color_q.get_mut(tile_entity) {
+            *color = TileColor(Color::rgba(0.0, 1.0, 0.5, 0.5));
+        }
+    }
+}
+
+/**
+ * On click, spawn a new tower at the selected_for_build tile.
+ */
+pub fn build_tower_at_click(
+    mut commands: Commands,
+    mut clicked_event_reader: EventReader<MouseButtonInput>,
+    selected_for_build_tile_q: Query<(&TilePos), With<SelectedForBuild>>,
+    tilemap_q: Query<(&TilemapGridSize, &TilemapType, &GlobalTransform)>,
+    asset_server: Res<AssetServer>,
+) {
+    for click in clicked_event_reader.iter() {
+        if click.button != MouseButton::Left || click.state != ButtonState::Pressed {
+            continue;
+        }
+        let Ok(tile_pos) = selected_for_build_tile_q.get_single() else {
+            return;
+        };
+        let Ok((tilemap_grid_size, tilemap_type, tilemap_transform)) = tilemap_q.get_single() else {
+            return;
+        };
+
+        let tile_world_pos = tile_pos.center_in_world(&tilemap_grid_size, &tilemap_type);
+
+        commands.spawn(
+            (
+                Tower {},
+                ProjectileThrower {
+                    relative_start: Vec2::new(0.0, 0.25 * 64.0),
+                    cooldown: Timer::from_seconds(1.0, TimerMode::Repeating),
+                    range: 450.0,
+                },
+                SpriteBundle {
+                    transform: Transform::from_translation(Vec3::from((tile_world_pos, 10.0)) + tilemap_transform.translation()),
+                    texture: asset_server.load("sprites/tower.png"),
+                    sprite: Sprite {
+                        anchor: Anchor::Center,
+                        ..default()
+                    },
                     ..default()
                 },
-                ..default()
-            },
-            Name::new("Tower"),
-        ),
-    );
+                Name::new("Tower"),
+            ),
+        );
+    }
 }
 
 pub fn spawn_enemy(
@@ -197,10 +331,7 @@ pub fn spawn_enemy(
     commands.spawn(
         (
             Enemy {},
-            Health {
-                current: 100,
-                max: 100,
-            },
+            Health::full(500),
             Healthbar {
                 length: 64.0,
                 height: 10.0,

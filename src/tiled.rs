@@ -10,10 +10,11 @@ use bevy::{
     utils::HashMap,
 };
 use bevy_ecs_tilemap::prelude::*;
+use tiled::ObjectShape;
 use tiled::PropertyValue::IntValue;
 
 // use tiled::PropertyValue;
-use crate::{EnemyFinish, EnemySpawner, Waypoint};
+use crate::{BuildZone, EnemyFinish, EnemySpawner, Waypoint};
 
 #[derive(Default)]
 pub struct TiledMapPlugin;
@@ -177,9 +178,7 @@ pub fn process_loaded_maps(
     }
 
     for changed_map in changed_maps.iter() {
-        println!("changed maps");
         for (map_handle, mut layer_storage) in map_query.iter_mut() {
-            println!("map handle");
             // only deal with currently changed map
             if map_handle != changed_map {
                 continue;
@@ -200,7 +199,6 @@ pub fn process_loaded_maps(
                 // tilesets on each layer and allows differently-sized tile images in each tileset,
                 // this means we need to load each combination of tileset and layer separately.
                 for (tileset_index, tileset) in tiled_map.map.tilesets().iter().enumerate() {
-                    println!("tileset");
                     let Some(tilemap_texture) = tiled_map
                         .tilemap_textures
                         .get(&tileset_index) else {
@@ -220,7 +218,6 @@ pub fn process_loaded_maps(
 
                     // Once materials have been created/added we need to then create the layers.
                     for (layer_index, layer) in tiled_map.map.layers().enumerate() {
-                        println!("layer");
                         let offset_x = layer.offset_x;
                         let offset_y = layer.offset_y;
 
@@ -249,6 +246,15 @@ pub fn process_loaded_maps(
                                         commands.spawn(EnemySpawner {
                                             position: Vec2::new(mapped_x, mapped_y),
                                             timer: Timer::from_seconds(2.0, TimerMode::Repeating),
+                                        }).insert(Name::new(object_data.name.clone()));
+                                    }
+                                    "BuildZone" => {
+                                        let (shape_width, shape_height) = match object_data.shape {
+                                            ObjectShape::Rect { width, height } => (width, height),
+                                            _ => (0.0, 0.0)
+                                        };
+                                        commands.spawn(BuildZone {
+                                            rect: Rect::new(mapped_x, mapped_y, mapped_x + shape_width, mapped_y - shape_height),
                                         }).insert(Name::new(object_data.name.clone()));
                                     }
                                     _ => {}
@@ -358,6 +364,7 @@ pub fn process_loaded_maps(
                                             y: layer_tile_data.flip_v,
                                             d: layer_tile_data.flip_d,
                                         },
+                                        color: TileColor(Color::WHITE),
                                         ..Default::default()
                                     });
 

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<map version="1.10" tiledversion="1.10.1" orientation="orthogonal" renderorder="left-down" width="32" height="32" tilewidth="64" tileheight="64" infinite="0" nextlayerid="3" nextobjectid="31">
+<map version="1.10" tiledversion="1.10.1" orientation="orthogonal" renderorder="left-down" width="32" height="32" tilewidth="64" tileheight="64" infinite="0" nextlayerid="3" nextobjectid="40">
  <tileset firstgid="1" name="default" tilewidth="64" tileheight="64" tilecount="299" columns="23" objectalignment="topleft">
   <image source="towerDefense_tilesheet.png" width="1472" height="832"/>
  </tileset>
@@ -100,5 +100,14 @@
   <object id="30" name="spawner" type="EnemySpawner" x="96" y="160">
    <point/>
   </object>
+  <object id="31" name="build_zone" type="BuildZone" x="716" y="910" width="490" height="676"/>
+  <object id="32" name="build_zone" type="BuildZone" x="334" y="1292" width="366" height="296"/>
+  <object id="33" name="build_zone" type="BuildZone" x="1226" y="906" width="622" height="48"/>
+  <object id="34" name="build_zone" type="BuildZone" x="1868" y="14" width="172" height="934"/>
+  <object id="35" name="build_zone" type="BuildZone" x="10" y="264" width="1646" height="436"/>
+  <object id="36" name="build_zone" type="BuildZone" x="10" y="710" width="494" height="372"/>
+  <object id="37" name="build_zone" type="BuildZone" x="1418" y="1160" width="306" height="878"/>
+  <object id="38" name="build_zone" type="BuildZone" x="12" y="1804" width="1390" height="238"/>
+  <object id="39" name="build_zone" type="BuildZone" x="1930" y="968" width="108" height="1068"/>
  </objectgroup>
 </map>
