@@ -13,14 +13,16 @@ use bevy_ecs_tilemap::prelude::*;
 use tiled::ObjectShape;
 use tiled::PropertyValue::IntValue;
 
+use crate::game::creep::components::*;
+
 // use tiled::PropertyValue;
-use crate::{BuildZone, EnemyFinish, EnemySpawner, Waypoint};
+use super::components::*;
 
 #[derive(Default)]
 pub struct TiledMapPlugin;
 
 impl Plugin for TiledMapPlugin {
-    fn build(&self, app: &mut bevy::prelude::App) {
+    fn build(&self, app: &mut App) {
         app.add_asset::<TiledMap>()
             .add_asset_loader(TiledLoader)
             .add_system(process_loaded_maps);
