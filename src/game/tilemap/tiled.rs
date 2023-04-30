@@ -148,31 +148,31 @@ impl AssetLoader for TiledLoader {
 
 pub fn process_loaded_maps(
     mut commands: Commands,
-    // mut map_events: EventReader<AssetEvent<TiledMap>>,
+    mut map_events: EventReader<AssetEvent<TiledMap>>,
     maps: Res<Assets<TiledMap>>,
     tile_storage_query: Query<(Entity, &TileStorage)>,
     mut map_query: Query<(&Handle<TiledMap>, &mut TiledLayersStorage)>,
     new_maps: Query<&Handle<TiledMap>, Added<Handle<TiledMap>>>,
 ) {
     let mut changed_maps = Vec::<Handle<TiledMap>>::default();
-    // for event in map_events.iter() {
-    //     match event {
-    //         AssetEvent::Created { handle } => {
-    //             log::info!("Map added!");
-    //             changed_maps.push(handle.clone());
-    //         }
-    //         AssetEvent::Modified { handle } => {
-    //             log::info!("Map changed!");
-    //             changed_maps.push(handle.clone());
-    //         }
-    //         AssetEvent::Removed { handle } => {
-    //             log::info!("Map removed!");
-    //             // if mesh was modified and removed in the same update, ignore the modification
-    //             // events are ordered so future modification events are ok
-    //             changed_maps.retain(|changed_handle| changed_handle == handle);
-    //         }
-    //     }
-    // }
+    for event in map_events.iter() {
+        match event {
+            AssetEvent::Created { handle } => {
+                log::info!("Map added!");
+                changed_maps.push(handle.clone());
+            }
+            AssetEvent::Modified { handle } => {
+                // log::info!("Map changed!");
+                // changed_maps.push(handle.clone());
+            }
+            AssetEvent::Removed { handle } => {
+                log::info!("Map removed!");
+                // if mesh was modified and removed in the same update, ignore the modification
+                // events are ordered so future modification events are ok
+                changed_maps.retain(|changed_handle| changed_handle == handle);
+            }
+        }
+    }
 
     // If we have new map entities add them to the changed_maps list.
     for new_map_handle in new_maps.iter() {
@@ -247,7 +247,7 @@ pub fn process_loaded_maps(
                                     "EnemySpawner" => {
                                         commands.spawn(EnemySpawner {
                                             position: Vec2::new(mapped_x, mapped_y),
-                                            timer: Timer::from_seconds(0.5, TimerMode::Repeating),
+                                            timer: Timer::from_seconds(1.5, TimerMode::Repeating),
                                         }).insert(Name::new(object_data.name.clone()));
                                     }
                                     "BuildZone" => {

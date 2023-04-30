@@ -5,6 +5,7 @@ use systems::*;
 use tilemap::TilemapPlugin;
 use tower::TowerPlugin;
 use ui::UiPlugin;
+use crate::AppState;
 
 mod tilemap;
 mod creep;
@@ -27,10 +28,7 @@ impl Plugin for GamePlugin {
             .add_plugin(UiPlugin)
         ;
         app
-            .add_startup_system(setup_camera)
-        ;
-        app
-            .add_system(move_camera)
+            .add_system(move_camera.in_set(OnUpdate(AppState::Game)))
         ;
     }
 }

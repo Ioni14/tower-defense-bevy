@@ -2,13 +2,6 @@ use bevy::prelude::*;
 
 const CAMERA_SPEED: f32 = 1000.0;
 
-pub fn setup_camera(mut commands: Commands) {
-    commands.spawn(Camera2dBundle {
-        transform: Transform::from_xyz(0.0, 0.0, 999.0),
-        ..default()
-    });
-}
-
 pub fn move_camera(
     mut camera_query: Query<&mut Transform, With<Camera>>,
     keyboard: Res<Input<KeyCode>>,

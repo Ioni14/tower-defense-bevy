@@ -1,22 +1,25 @@
+use bevy::prelude::*;
+use bevy::render::RenderApp;
+use bevy::sprite::SpriteSystem;
+
+use components::*;
+use events::*;
+use resources::*;
+use systems::*;
+
+use crate::AppState;
+
 mod systems;
 pub mod components;
 mod resources;
 pub mod events;
-
-use bevy::prelude::*;
-use bevy::render::RenderApp;
-use bevy::sprite::SpriteSystem;
-use events::*;
-use resources::*;
-use components::*;
-use systems::*;
 
 pub struct CreepPlugin;
 
 impl Plugin for CreepPlugin {
     fn build(&self, app: &mut App) {
         app
-            .add_event::<KilledEvent>();
+            .add_event::<KilledEvent>()
         ;
 
         if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
@@ -28,13 +31,16 @@ impl Plugin for CreepPlugin {
                 );
         };
 
-        app
-            .add_system(spawn_enemy)
-            .add_system(follow_waypoint)
-            .add_system(reach_waypoint)
-            .add_system(do_move_step)
-            .add_system(on_enemy_killed)
-            .add_system(despawn_dying)
-        ;
+        app.add_systems(
+            (
+                spawn_enemy,
+                follow_waypoint,
+                reach_waypoint,
+                do_move_step,
+                on_enemy_killed,
+                despawn_dying,
+            )
+                .in_set(OnUpdate(AppState::Game))
+        );
     }
 }

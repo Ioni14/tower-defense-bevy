@@ -5,6 +5,7 @@ use events::*;
 use resources::*;
 use systems::*;
 
+use crate::AppState;
 use crate::game::*;
 use crate::game::tilemap::can_build;
 
@@ -20,11 +21,19 @@ impl Plugin for TowerPlugin {
         app
             .add_event::<ProjectileHitEvent>()
         ;
+        app.add_systems(
+            (
+                throw_projectiles,
+                projectile_follow_step,
+                deal_projectile_damage,
+            )
+                .in_set(OnUpdate(AppState::Game))
+        );
         app
-            .add_system(throw_projectiles)
-            .add_system(projectile_follow_step)
-            .add_system(deal_projectile_damage)
-            .add_system(build_tower_at_click.run_if(can_build))
+            .add_system(build_tower_at_click
+                .run_if(can_build)
+                .in_set(OnUpdate(AppState::Game))
+            )
         ;
     }
 }
