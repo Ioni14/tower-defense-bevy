@@ -247,7 +247,7 @@ pub fn process_loaded_maps(
                                     "EnemySpawner" => {
                                         commands.spawn(EnemySpawner {
                                             position: Vec2::new(mapped_x, mapped_y),
-                                            timer: Timer::from_seconds(2.0, TimerMode::Repeating),
+                                            timer: Timer::from_seconds(0.5, TimerMode::Repeating),
                                         }).insert(Name::new(object_data.name.clone()));
                                     }
                                     "BuildZone" => {
@@ -375,7 +375,6 @@ pub fn process_loaded_maps(
                             }
                         }
 
-                        println!("insert TilemapBundle {:?}", layer_entity.index());
                         commands.entity(layer_entity).insert(TilemapBundle {
                             grid_size,
                             size: map_size,

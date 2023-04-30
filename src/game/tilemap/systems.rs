@@ -32,6 +32,27 @@ pub fn setup_map(
     });
 }
 
+fn remove_selected_for_build(
+    mut commands: &mut Commands,
+    mut tile_color_q: &mut Query<&mut TileColor>,
+    selected_for_build_q: &Query<Entity, With<SelectedForBuild>>,
+) {
+    for selected_for_build_entity in selected_for_build_q.iter() {
+        if let Ok(mut color) = tile_color_q.get_mut(selected_for_build_entity) {
+            *color = TileColor(Color::WHITE);
+        }
+        commands.entity(selected_for_build_entity).remove::<SelectedForBuild>();
+    }
+}
+
+pub fn unselect_build_zone(
+    mut commands: Commands,
+    mut tile_color_q: Query<&mut TileColor>,
+    selected_for_build_q: Query<Entity, With<SelectedForBuild>>,
+) {
+    remove_selected_for_build(&mut commands, &mut tile_color_q, &selected_for_build_q);
+}
+
 /**
  * When we move the mouse over the tilemap, the targeted tile should be highlighted.
  * see https://github.com/StarArawn/bevy_ecs_tilemap/blob/main/examples/mouse_to_tile.rs#L315
@@ -54,12 +75,7 @@ pub fn select_build_zone(
 ) {
     // TODO : only if cursor pos has changed
 
-    for selected_for_build_entity in selected_for_build_q.iter() {
-        if let Ok(mut color) = tile_color_q.get_mut(selected_for_build_entity) {
-            *color = TileColor(Color::WHITE);
-        }
-        commands.entity(selected_for_build_entity).remove::<SelectedForBuild>();
-    }
+    remove_selected_for_build(&mut commands, &mut tile_color_q, &selected_for_build_q);
 
     for (map_size, grid_size, map_type, tile_storage, map_transform, tile_size) in tilemap_q.iter() {
         // Grab the cursor position from the `Res<CursorPos>`

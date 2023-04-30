@@ -4,7 +4,7 @@ use bevy::math::Vec3Swizzles;
 use bevy::prelude::*;
 use bevy::sprite::Anchor;
 use bevy_ecs_tilemap::prelude::*;
-use crate::game::creep::components::{Enemy, Health};
+use crate::game::creep::components::{Dying, Enemy, Health};
 use crate::game::creep::events::KilledEvent;
 use crate::game::tilemap::components::{BuiltTile, SelectedForBuild};
 use super::events::ProjectileHitEvent;
@@ -128,7 +128,7 @@ pub fn projectile_follow_step(
     mut commands: Commands,
     mut projectile_query: Query<(Entity, &Follower, &mut Transform, &Projectile)>,
     mut projectile_hit_event_writer: EventWriter<ProjectileHitEvent>,
-    target_query: Query<&Transform, Without<Projectile>>,
+    target_query: Query<&Transform, (Without<Projectile>, Without<Dying>)>,
     time: Res<Time>,
 ) {
     for (follower_entity, follower, mut follower_transform, projectile) in projectile_query.iter_mut() {
@@ -146,10 +146,12 @@ pub fn projectile_follow_step(
                     damage: projectile.damage as f32,
                     target: follower.target,
                 });
+                // println!("despawn projectile because hit target {:?}", follower_entity);
                 commands.entity(follower_entity).despawn_recursive();
             }
         } else {
             // target does not exist anymore (e.g. reached finish waypoint), despawn projectile
+            // println!("despawn projectile because no more target {:?}", follower_entity);
             commands.entity(follower_entity).despawn_recursive();
             continue;
         }

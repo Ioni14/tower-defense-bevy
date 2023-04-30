@@ -4,6 +4,7 @@ use bevy_ecs_tilemap::prelude::*;
 use components::*;
 use resources::*;
 use systems::*;
+use crate::game::{GameState, UiState};
 
 mod systems;
 pub mod components;
@@ -27,7 +28,15 @@ impl Plugin for TilemapPlugin {
 
         app
             .add_system(update_cursor_pos)
-            .add_system(select_build_zone)
+            .add_system(unselect_build_zone.in_schedule(OnExit(GameState::Building)))
+            .add_system(select_build_zone.run_if(can_build))
         ;
     }
+}
+
+pub fn can_build(
+    game_state: Res<State<GameState>>,
+    ui_state: Res<State<UiState>>,
+) -> bool {
+    return game_state.0 == GameState::Building && ui_state.0 == UiState::Nothing;
 }

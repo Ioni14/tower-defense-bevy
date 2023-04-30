@@ -1,3 +1,4 @@
+use std::cmp::max;
 use bevy::math::Vec3Swizzles;
 use bevy::prelude::*;
 use bevy::render::Extract;
@@ -73,6 +74,7 @@ pub fn follow_waypoint(
                 velocity.direction = ((finish.position + tilemap_top_left.xy()) - transform.translation.xy()).normalize();
             } else {
                 // no finish : despawn now
+                println!("despawn creep because no more waypoint {:?}", follower_entity);
                 commands.entity(follower_entity).despawn_recursive();
             }
 
@@ -107,6 +109,7 @@ pub fn reach_waypoint(
 
             if ((finish.position + tilemap_top_left.xy()) - transform.translation.xy()).length_squared() < 1.0 {
                 // finish reached : TODO : publish event, update score...
+                println!("despawn creep because finish reached {:?}", follower_entity);
                 commands.entity(follower_entity).despawn_recursive();
             }
 
@@ -122,13 +125,29 @@ pub fn reach_waypoint(
 pub fn on_enemy_killed(
     mut commands: Commands,
     mut event_reader: EventReader<KilledEvent>,
-    enemy_query: Query<&Enemy>,
+    enemy_query: Query<&Enemy, Without<Dying>>,
 ) {
     for event in event_reader.iter() {
-        enemy_query.get(event.who).ok().map(|enemy| {
-            // TODO : add points ?
-            commands.entity(event.who).despawn_recursive();
-        });
+        if let Some(mut who_entity) = commands.get_entity(event.who) {
+            // println!("despawn creep because killed {:?}", event.who);
+            // who_entity.despawn_recursive();
+            println!("set dying creep because killed {:?}", event.who);
+            who_entity.insert(Dying);
+        }
+        // enemy_query.get(event.who).ok().map(|enemy| {
+        //     // TODO : add points ?
+        //     commands.entity(event.who).despawn_recursive();
+        // });
+    }
+}
+
+pub fn despawn_dying(
+    mut commands: Commands,
+    dying_query: Query<Entity, With<Dying>>,
+) {
+    for dying in dying_query.iter() {
+        println!("despawn creep because killed {:?}", dying);
+        commands.entity(dying).despawn_recursive();
     }
 }
 
@@ -182,7 +201,7 @@ pub fn extract_health_bar(
 
         // current life
         let padding = 2.0;
-        let health_percent = health.current as f32 / health.max as f32;
+        let health_percent = 0.0f32.max(health.current as f32 / health.max as f32);
         let width = healthbar.length * health_percent;
         let mut healthbar_translation = background_translation.clone();
         healthbar_translation.x += padding; // "left border"

@@ -34,6 +34,7 @@ impl Plugin for CreepPlugin {
             .add_system(reach_waypoint)
             .add_system(do_move_step)
             .add_system(on_enemy_killed)
+            .add_system(despawn_dying)
         ;
     }
 }

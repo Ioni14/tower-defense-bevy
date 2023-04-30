@@ -46,3 +46,6 @@ pub struct Healthbar {
     pub length: f32,
     pub height: f32,
 }
+
+#[derive(Component)]
+pub struct Dying;
