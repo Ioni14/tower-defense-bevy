@@ -36,7 +36,7 @@ fn main() {
         })
         .set(ImagePlugin::default_nearest())
     );
-    // app.add_plugin(WorldInspectorPlugin::new());
+    app.add_plugin(WorldInspectorPlugin::new());
 
     app.add_plugin(GamePlugin);
     app.add_plugin(MainMenuPlugin);

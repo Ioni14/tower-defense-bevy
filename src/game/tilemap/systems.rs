@@ -1,6 +1,7 @@
 use bevy::math::Vec4Swizzles;
 use bevy::prelude::*;
 use bevy_ecs_tilemap::prelude::*;
+use crate::game::resources::TowerType;
 use super::tiled::*;
 use super::components::*;
 use super::resources::*;
@@ -117,9 +118,7 @@ pub fn select_build_zone(
             continue;
         }
 
-        commands.entity(tile_entity).insert(SelectedForBuild {
-            // previousColor: Some(color),
-        });
+        commands.entity(tile_entity).insert(SelectedForBuild {});
         if let Ok(mut color) = tile_color_q.get_mut(tile_entity) {
             *color = TileColor(Color::rgba(0.0, 1.0, 0.5, 0.5));
         }

@@ -6,12 +6,14 @@ use tilemap::TilemapPlugin;
 use tower::TowerPlugin;
 use ui::UiPlugin;
 use crate::AppState;
+use crate::game::resources::BuildTower;
 
 mod tilemap;
 mod creep;
 mod tower;
 mod systems;
 mod ui;
+mod resources;
 
 pub struct GamePlugin;
 
@@ -21,6 +23,7 @@ impl Plugin for GamePlugin {
             .add_state::<GameState>()
             .add_state::<UiState>()
         ;
+        app.init_resource::<BuildTower>();
         app
             .add_plugin(TilemapPlugin)
             .add_plugin(CreepPlugin)

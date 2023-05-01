@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use crate::game::resources::TowerType;
 
 #[derive(Component)]
 pub struct SelectedForBuild {}

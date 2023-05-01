@@ -24,7 +24,9 @@ impl Plugin for TowerPlugin {
         app.add_systems(
             (
                 throw_projectiles,
+                throw_splashes,
                 projectile_follow_step,
+                pointer_follow_step,
                 deal_projectile_damage,
             )
                 .in_set(OnUpdate(AppState::Game))
